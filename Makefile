@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -Wall
 
-OBJS = mysh.o engine.o
+OBJS = mysh.o shcore.o
 
 all: mysh
 
