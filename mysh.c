@@ -8,6 +8,7 @@
 #define BUFFER_SIZE 1024
 #define MAX_LINE 2048
 
+
 static int status = 0;
 
 typedef struct {
@@ -48,22 +49,27 @@ static char char_reader(Input *input) {
 //gets symbol like < > and | as input handles whitespace, etc
 static char *tokenizer(Input *input) {
     char token[BUFFER_SIZE];
-    int i = 0; char current;
+    int i = 0;
+    char current;
 
     while (1) {
         current = char_reader(input);
-        if (input->close) {
-            return NULL;
-        }
+        if (input->close) return NULL;
+
         if (current == '\n') {
             input->newline = 1;
             token[0] = '\n';
             token[1] = '\0';
             return strdup(token);
         }
-        if (!isspace(current)) {
-            break;
+        if (isspace(current)) continue;
+
+        if (current == '<' || current == '>' || current == '|') {
+            token[0] = current;
+            token[1] = '\0';
+            return strdup(token);
         }
+        break;
     }
 
     input->newline = 0;
@@ -71,17 +77,10 @@ static char *tokenizer(Input *input) {
     while (current != '\0' && !isspace(current) && current != '<' && current != '>' && current != '|' && current != '\n') {
         token[i++] = current;
         current = char_reader(input);
-
-        if (isspace(current) || current == '<' || current == '>' || current == '|' || current == '\n') {
-            input->pos--;
-            break;
-        }
     }
 
-    if (current == '<' || current == '>' || current == '|') {
-        token[0] = current;
-        token[1] = '\0';
-        return strdup(token);
+    if (current != '\0') {
+        input->pos--;
     }
 
     token[i] = '\0';
@@ -91,35 +90,81 @@ static char *tokenizer(Input *input) {
 //reads entire line and builds it from the tokens, stops reading when complete command is done
 static char *line_reader(Input *input) {
     static char line[MAX_LINE];
+    int i = 0;
     line[0] = '\0';
 
-    char *token;
-    while ((token = tokenizer(input)) != NULL) {
+    while (1) {
+        char *token = tokenizer(input);
+        if (!token)  {
+            break;
+        }
+
         if (token[0] == '#' && token[1] == '\0') {
+            free(token);
             while (!input->newline && !input->close) {
-                free(token);
-                token = tokenizer(input);
+                char *comment = tokenizer(input);
+                if (comment) {
+                    free(comment);
+                }
             }
+            break;
+        }
+
+        int length = strlen(token);
+        if (i + length + 2 >= MAX_LINE) {
             free(token);
             break;
         }
 
-        strcat(line, token);
-        strcat(line, " ");
-        int end = input->newline;
-        free(token);
-        if (end) {
+        strcpy(&line[i], token);
+        i += length;
+        line[i++] = ' ';
+        line[i] = '\0';
+
+        if (input->newline) {
+            free(token);
             break;
         }
+
+        free(token);
     }
 
-    if (strlen(line) == 0 && input->close) {
-        return NULL;
-    }
+    if (i == 0 && input->close) return NULL;
     return line;
 }
 
-//parses command into the struct, and extracts any arguments entered from the user (pipes, conditions, redirection)
+char *condition_handler(Commands *commands, char *token) {
+    if (token != NULL && strcmp(token, "and") == 0) {
+        commands->condition = AND;
+        return strtok(NULL, " \t\n");
+    } else if (token != NULL && strcmp(token, "or") == 0) {
+        commands->condition = OR;
+        return strtok(NULL, " \t\n");
+    } else {
+        commands->condition = NONE;
+        return token;
+    }
+}
+
+void print_debug(Commands *commands) {
+    while (commands) {
+        printf("\nParsed command: %s\n", commands->args[0]);
+        for (int i = 1; i < commands->argc; i++) {
+            printf("Arg %d: %s\n", i, commands->args[i]);
+        }
+        if (commands->input) printf("Input redirection: %s\n", commands->input);
+        if (commands->output) printf("Output redirection: %s\n", commands->output);
+        if (commands->pipe) printf("This is a piped command\n");
+
+        if (commands->condition == AND) printf("Condition: AND\n");
+        else if (commands->condition == OR) printf("Condition: OR\n");
+        else printf("Condition: NONE\n");
+
+        commands = commands->next;
+    }
+}
+
+//parses command into the struct, and extracts any arguments entered from the user (pipes, conditions, redirection, wildcards)
 Commands *command_parser(char *line) {
     if (line == NULL) {
         return NULL;
@@ -138,43 +183,39 @@ Commands *command_parser(char *line) {
     commands->argc = 0;
 
     char *token = strtok(line, " \t\n");
-
-    if (token != NULL && strcmp(token, "and") == 0) {
-        commands->condition = AND;
-        token = strtok(NULL, " \t\n");
-    } else if (token != NULL && strcmp(token, "or") == 0) {
-        commands->condition = OR;
-        token = strtok(NULL, " \t\n");
-    } else {
-        commands->condition = NONE;
-    }
+    // and - or
+    token = condition_handler(commands, token);
 
     while (token != NULL) {
-        if (strcmp(token, "<") == 0) {
-            token = strtok(NULL, " \t\n");
-            if (token != NULL) {
-                commands->input = strdup(token);
+        //wilcards
+        if (strchr(token, '*') != NULL) {
+            wildcard(commands, token);
+        } 
+        //redirction
+        else if (strcmp(token, "<") == 0 || strcmp(token, ">") == 0) {
+            char *file = strtok(NULL, " \t\n");
+            if (file) {
+                if (token[0] == '<') {
+                    commands->input = strdup(file);
+                } else {
+                    commands->output = strdup(file);
+                }
             }
-        } else if (strcmp(token, ">") == 0) {
-            token = strtok(NULL, " \t\n");
-            if (token != NULL) {
-                commands->output = strdup(token);
-            }
-        } else if (strcmp(token, "|") == 0) {
+        } 
+        //piping
+        else if (strcmp(token, "|") == 0) {
             commands->pipe = 1;
-            token = strtok(NULL, " \t\n");
-            if (token != NULL) {
+            token = strtok(NULL, "");
+            if (token) {
                 commands->next = command_parser(token);
             }
             break;
-        } else {
-            if (strchr(token, '*') != NULL) {
-                wildcard(commands, token);
-            } else {
-                commands->args[commands->argc] = strdup(token);
-                commands->argc++;
-            }
+        } 
+        //other args that are valid
+        else {
+            commands->args[commands->argc++] = strdup(token);
         }
+
 
         token = strtok(NULL, " \t\n");
     }
@@ -190,38 +231,102 @@ Commands *command_parser(char *line) {
 }
 
 static void interactive_mode() {
+    Input input; initialize(&input, STDIN_FILENO);
+    printf("Welcome to my shell!\n");
+
+    while (1) {
+        printf("mysh> ");
+        fflush(stdout);
+        char *line = line_reader(&input);
+
+        if (!line) {
+            break;
+        }
+
+        Commands *commands = command_parser(line);
+        if (!commands) {
+            continue;
+        }
+
+        print_debug(commands);
+
+        int prev_failed = (status != 0);
+        int prev_succeeded = (status == 0);
+
+        if ((commands->condition == AND && !prev_succeeded) || (commands->condition == OR && !prev_failed)) {
+            free_commands(commands);
+            continue;
+        }
+
+        if (is_a_builtin(commands)) {
+            status = builtin_executor(commands);
+            free_commands(commands);
+            continue;
+        }
+
+        status = command_executor(commands);
+        free_commands(commands);
+    }
+
+    printf("Exiting, Goodbye\n");
 
 }
 
 static void batch_mode(int fd) {
+    Input input; initialize(&input, fd);
 
+    while (1) {
+        char *line = line_reader(&input);
+
+        if (!line) {
+            break;
+        }
+
+        Commands *commands = command_parser(line);
+        if (!commands) {
+            continue;
+        }
+
+        int prev_failed = (status != 0);
+        int prev_succeeded = (status == 0);
+
+        if ((commands->condition == AND && !prev_succeeded) || (commands->condition == OR && !prev_failed)) {
+            free_commands(commands);
+            continue;
+        }
+
+        if (is_a_builtin(commands)) {
+            status = builtin_executor(commands);
+            free_commands(commands);
+            continue;
+        }
+
+        status = command_executor(commands);
+        free_commands(commands);
+        
+    }
 }
 
 int main(int argc, char *argv[]) {
     FILE *file = NULL;
 
-    if (argc < 2) {
-        exit(EXIT_FAILURE);
-    }
-
-    //batch mode
-    if (argc == 2) {
-        file = fopen(argv[1], "r");
-        if (!file) {
-            perror("Error: cant open file");
-            exit(EXIT_FAILURE);
-        }
-        batch_mode(fileno(file));
-        fclose(file);
-
-    } else {
+    if (argc == 1) {
         if (isatty(STDIN_FILENO)) {
             interactive_mode();
         } else {
             batch_mode(STDIN_FILENO);
         }
+    } else if (argc == 2) {
+        file = fopen(argv[1], "r");
+        if (!file) {
+            perror("Error: can't open file");
+            exit(EXIT_FAILURE);
+        }
+        batch_mode(fileno(file));
+        fclose(file);
+    } else {
+        exit(EXIT_FAILURE);
     }
-
     
     return EXIT_SUCCESS;
 }
