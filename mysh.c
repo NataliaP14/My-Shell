@@ -190,6 +190,7 @@ Commands *command_parser(char *line) {
         //wilcards
         if (strchr(token, '*') != NULL) {
             wildcard(commands, token);
+
         } 
         //redirction
         else if (strcmp(token, "<") == 0 || strcmp(token, ">") == 0) {
