@@ -58,7 +58,26 @@ void wildcard(Commands *commands, const char *token) {
 }
 
 //redirection logic (use dup2())
-static void redirection() {
+static void redirection(Commands *commands) {
+    if (commands->input) {
+        int fd;
+        if ((fd = open(commands->input, O_RDONLY, 0)) < 0) {
+            perror("Error: couldn't open input file");
+            exit(EXIT_FAILURE);
+        }
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+    }
+
+    if (commands->output) {
+        int fd;
+        if ((fd = open(commands->output, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0) {
+            perror("Error: couldn't open output file");
+            exit(EXIT_FAILURE);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+    }
    
 }
 
