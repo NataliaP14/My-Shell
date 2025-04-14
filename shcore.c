@@ -71,7 +71,7 @@ static void redirection(Commands *commands) {
 
     if (commands->output) {
         int fd;
-        if ((fd = open(commands->output, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0) {
+        if ((fd = open(commands->output, O_WRONLY | O_CREAT | O_TRUNC, 0640)) < 0) {
             perror("Error: couldn't open output file");
             exit(EXIT_FAILURE);
         }
@@ -81,8 +81,75 @@ static void redirection(Commands *commands) {
    
 }
 
+void external_commands(Commands *commands) {
+    if (strchr(commands->args[0], '/')) {
+        execv(commands->args[0], commands->args);
+    } else {
+        const char *directories[] = {"/usr/local/bin", "/usr/bin", "/bin"}; 
+
+        for (int i = 0; i < 3; i++) {
+            char fullpath[1024];
+            strcpy(fullpath, directories[i]);
+            strcat(fullpath, "/");
+            strcat(fullpath, commands->args[0]);
+            execv(fullpath, commands->args);
+        }
+        perror("Error: execv failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
 //sets up the pipeline between 2 processes
-static void pipeline() {
+static int pipeline(Commands *leftchild, Commands *rightchild) {
+    int p[2];
+
+    if (pipe(p) == -1) {
+        perror("Error: pipe failed");
+        exit(EXIT_FAILURE);
+    }
+
+    //left command
+    pid_t pid;
+    pid = fork();
+    if (pid < 0) {
+        perror("Error: fork failed");
+        exit(EXIT_FAILURE);
+    } else if (pid == 0) {
+        close(p[0]);
+        dup2(p[1], STDOUT_FILENO);
+        close(p[1]);
+        redirection(leftchild);
+        external_commands(leftchild);
+        exit(EXIT_FAILURE);
+    }
+
+    //right command
+    pid_t pid2;
+    pid2 = fork();
+    if (pid2 < 0) {
+        perror("Error: fork failed");
+        exit(EXIT_FAILURE);
+    } else if (pid2 == 0) {
+        close(p[1]);
+        dup2(p[0], STDIN_FILENO);
+        close(p[0]);
+        redirection(rightchild);
+        external_commands(rightchild);
+        exit(EXIT_FAILURE);
+    }
+
+    //close parent
+    close(p[0]);
+    close(p[1]);
+    int status;
+    waitpid(pid2, &status, 0);
+    waitpid(pid, NULL, 0);
+
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    } else {
+        return EXIT_FAILURE;  
+    }
 
 }
 
