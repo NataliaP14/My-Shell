@@ -10,15 +10,72 @@
 #include <errno.h>
 #include <glob.h>
 
+char *builtin_str[] = {
+    "cd",
+    "pwd",
+    "which",
+    "exit",
+    "die"
+  };
+
+  int (*builtin_func[]) (char **) = {
+    &cd,
+    &pwd,
+    &which,
+    &exit,
+    &die
+  };
+
 
 //Checks if its a built in command (cd, pwd, which, die, exit) returns 1 if it is and 0 otherwise
 int is_a_builtin(Commands *commands) {
     
 }
 
+int num_builtins(){
+    return sizeof(builtin_str)/sizeof(char*);
+}
+
 //actual logic for the built in commands 
 int builtin_executor(Commands *command) {
-  
+  if(command->args[0]==NULL){
+    printf("empty command");
+    return 1;
+  }
+  for (int i = 0; i < num_builtins(); i++) {
+    if (strcmp(command->args[0], builtin_str[i]) == 0) {
+      return (*builtin_func[i])(command->args);
+    }
+  }
+}
+
+int cd(char *path){
+    if(path==NULL){
+        path==getenv("HOME");
+        if(path==NULL){
+            return 1;
+        }
+    }
+    if(chdir(path)!=0){
+        printf("chdir failed.");
+        return 1;
+    }
+    return 0;
+}
+int pwd(){
+
+}
+
+int which(){
+
+}
+
+int die(){
+
+}
+
+int chdir(const char *path){
+
 }
 
 
