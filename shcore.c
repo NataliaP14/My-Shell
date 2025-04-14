@@ -13,12 +13,12 @@
 
 //Checks if its a built in command (cd, pwd, which, die, exit) returns 1 if it is and 0 otherwise
 int is_a_builtin(Commands *commands) {
-    
+    return 0;
 }
 
 //actual logic for the built in commands 
 int builtin_executor(Commands *command) {
-  
+    return 0;
 }
 
 
@@ -33,7 +33,7 @@ void wildcard(Commands *commands, const char *token) {
     size_t unchanged_argc = commands->argc;
 
     for (size_t i = 0; i < res.gl_pathc; i++) {
-        const char *slash = strchr(res.gl_pathv[i], "/");
+        const char *slash = strchr(res.gl_pathv[i], '/');
         const char *file;
 
         if (slash) {
@@ -42,7 +42,7 @@ void wildcard(Commands *commands, const char *token) {
             file = res.gl_pathv[i];
         }
 
-        if (file[0] == "." && token[0] != ".") {
+        if (file[0] == '.' && token[0] != '.') {
             continue;
         }
 
@@ -81,6 +81,7 @@ static void redirection(Commands *commands) {
    
 }
 
+//for the external commands (ls, echo, cat, etc )
 void external_commands(Commands *commands) {
     if (strchr(commands->args[0], '/')) {
         execv(commands->args[0], commands->args);
@@ -92,6 +93,8 @@ void external_commands(Commands *commands) {
             strcpy(fullpath, directories[i]);
             strcat(fullpath, "/");
             strcat(fullpath, commands->args[0]);
+
+            //fprintf(stderr, "Trying: %s\n", fullpath);
             execv(fullpath, commands->args);
         }
         perror("Error: execv failed");
@@ -153,9 +156,38 @@ static int pipeline(Commands *leftchild, Commands *rightchild) {
 
 }
 
+//executes external commands by calling external_commands function, also calls the redirction and pipeline functions
+int command_executor(Commands *commands) {
+    //fprintf(stderr, "command_executor: got command '%s'\n", commands->args[0]);
+    if (!commands || commands->argc == 0) {
+        return EXIT_FAILURE;
+    }
 
-//executes external commands using fork() and execv() (like ls, cat, echo, etc), also calls the redirction and pipeline functions
-int command_executor(Commands *command) {
+    if (commands->pipe && commands->next) {
+        return pipeline(commands, commands->next);
+    }
+
+    pid_t pid;
+    pid = fork();
+
+    if (pid < 0) {
+        perror("Error: pipe failed");
+        exit(EXIT_FAILURE);
+
+    } else if (pid == 0) {
+        redirection(commands);
+        external_commands(commands);
+        exit(EXIT_FAILURE); // only runs if execv fails!
+    }
+
+    int status;
+    waitpid(pid, &status, 0);
+
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    } else {
+        return EXIT_FAILURE;  
+    }
     
 }
 

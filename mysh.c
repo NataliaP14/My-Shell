@@ -249,7 +249,7 @@ static void interactive_mode() {
             continue;
         }
 
-        print_debug(commands);
+        //print_debug(commands);
 
         int prev_failed = (status != 0);
         int prev_succeeded = (status == 0);
