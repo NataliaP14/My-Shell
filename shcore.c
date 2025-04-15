@@ -82,13 +82,18 @@ int pwd(){
     return 0;
 }
 
-int which(){
-    char *path_env = getenv("PATH");
+int which(Commands *commands){
+    const char *directories[] = {"/usr/local/bin", "/usr/bin", "/bin"}; 
 
-    if (path_env == NULL) {
-        return 1;
+    for (int i = 0; i < 3; i++) {
+        char fullpath[1024];
+        strcpy(fullpath, directories[i]);
+        strcat(fullpath, "/");
+        strcat(fullpath, commands->args[1]);
+
+        if (access(fullpath, F_OK) == 0) {
     }
-    
+}
 }
 
 int exit(){
