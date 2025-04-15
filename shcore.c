@@ -10,16 +10,103 @@
 #include <errno.h>
 #include <glob.h>
 
+char *builtin_str[] = {
+    "cd",
+    "pwd",
+    "which",
+    "exit",
+    "die"
+  };
+
+  int (*builtin_func[]) (char **) = {
+    &cd,
+    &pwd,
+    &which,
+    &exit,
+    &die
+  };
+
 
 //Checks if its a built in command (cd, pwd, which, die, exit) returns 1 if it is and 0 otherwise
 int is_a_builtin(Commands *commands) {
-    return 0;
+    int builtin=0;
+
+    for(int i = 0; i < num_builtins();i++){
+        if(strcmp(commands->args[0],builtin_str[i])==0){
+            builtin=1;
+        }
+    }
+
+    return builtin;
+}
+
+int num_builtins(){
+    return sizeof(builtin_str)/sizeof(char*);
 }
 
 //actual logic for the built in commands 
 int builtin_executor(Commands *command) {
+  if(command->args[0]==NULL){
+    printf("empty command");
+    return 1;
+  }
+  for (int i = 0; i < num_builtins(); i++) {
+    if (strcmp(command->args[0], builtin_str[i]) == 0) {
+      return (*builtin_func[i])(command->args);
+    }
+  }
+}
+
+int cd(char *path){
+    if(path==NULL){
+        path==getenv("HOME");
+        if(path==NULL){
+            return 1;
+        }
+    }
+    if(chdir(path)!=0){
+        printf("chdir failed.");
+        return 1;
+    }
     return 0;
 }
+int pwd(){
+    char *cwd;
+    size_t dirsize=pathconf(".", _PC_PATH_MAX);
+    getcwd(cwd,dirsize);
+    if(cwd==NULL){
+        printf("pwd failed");
+        return 1;
+    }
+    printf("current working directory: %s",cwd);
+    return 0;
+}
+
+int which(Commands *commands){
+    const char *directories[] = {"/usr/local/bin", "/usr/bin", "/bin"}; 
+
+    for (int i = 0; i < 3; i++) {
+        char fullpath[1024];
+        strcpy(fullpath, directories[i]);
+        strcat(fullpath, "/");
+        strcat(fullpath, commands->args[1]);
+
+        if (access(fullpath, F_OK) == 0) {
+            printf("Path to executable: %s",fullpath);
+            return 0;
+    }
+}
+}
+
+int exit(){
+
+    return 0;
+}
+
+int die(){
+    return 1;
+}
+
 
 
 //for wildcard *
