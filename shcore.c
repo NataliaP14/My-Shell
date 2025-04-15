@@ -105,7 +105,6 @@ void external_commands(Commands *commands) {
 //sets up the pipeline between 2 processes
 static int pipeline(Commands *leftchild, Commands *rightchild) {
     int p[2];
-
     if (pipe(p) == -1) {
         perror("Error: pipe failed");
         exit(EXIT_FAILURE);
@@ -192,6 +191,28 @@ int command_executor(Commands *commands) {
 }
 
 //frees all allocated memory from the struct and everything else
-void free_commands(Commands *command) {
+void free_commands(Commands *commands) {
+    if (!commands) {
+        return;
+    }  
+    
+    for (int i = 0; i < commands->argc; i++) {
+        free(commands->args[i]);
+    }
+
+    free(commands->args);
+
+    if (commands->input) {
+        free(commands->input);
+    }
+    if (commands->output) {
+        free(commands->output);
+    }
+
+    if (commands->next) {
+        free_commands(commands->next);
+    }
+
+    free(commands);
 
 }

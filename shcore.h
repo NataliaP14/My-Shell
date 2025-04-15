@@ -22,4 +22,7 @@ void wildcard();
 int command_executor(Commands *command);
 void free_commands(Commands *command);
 
+extern int batch_mode_flag;
+
+
 #endif

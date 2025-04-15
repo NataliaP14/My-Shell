@@ -10,6 +10,8 @@
 
 
 static int status = 0;
+int batch_mode_flag = 0;
+
 
 typedef struct {
     int fd;
@@ -80,7 +82,11 @@ static char *tokenizer(Input *input) {
     }
 
     if (current != '\0') {
-        input->pos--;
+        if (current == '\n') {
+            input->newline = 1;
+        } else {
+            input->pos--;
+        }
     }
 
     token[i] = '\0';
@@ -130,7 +136,8 @@ static char *line_reader(Input *input) {
     }
 
     if (i == 0 && input->close) return NULL;
-    return line;
+    if (i == 0) return strdup("");
+    return strdup(line);
 }
 
 char *condition_handler(Commands *commands, char *token) {
@@ -164,8 +171,20 @@ void print_debug(Commands *commands) {
     }
 }
 
+static void flush(Input *input) {
+    while (!input->newline && !input->close) {
+        char c = char_reader(input);
+        if (c == '\n') {
+            input->newline = 1; 
+            break;
+        }
+    }
+    input->newline = 0;
+
+}
+
 //parses command into the struct, and extracts any arguments entered from the user (pipes, conditions, redirection, wildcards)
-Commands *command_parser(char *line) {
+Commands *command_parser(char *line, Input *input) {
     if (line == NULL) {
         return NULL;
     }
@@ -195,26 +214,92 @@ Commands *command_parser(char *line) {
         //redirction
         else if (strcmp(token, "<") == 0 || strcmp(token, ">") == 0) {
             char *file = strtok(NULL, " \t\n");
-            if (file) {
-                if (token[0] == '<') {
-                    commands->input = strdup(file);
-                } else {
-                    commands->output = strdup(file);
-                }
+
+            if (!file) {
+                fprintf(stderr, "Error: missing or invalid filename after '%s'\n", token);
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
             }
-        } 
+
+            if (token[0] == '<') {
+                if (commands->input != NULL) {
+                    fprintf(stderr, "Error: multiple input redirections\n");
+                    if (input != NULL) { flush(input); }
+                    free_commands(commands);
+                    return NULL;
+                }
+                commands->input = strdup(file);
+            } else {
+                if (commands->output != NULL) {
+                    fprintf(stderr, "Error: multiple output redirections\n");
+                    if (input != NULL) { flush(input); }
+                    free_commands(commands);
+                    return NULL;
+                }
+                commands->output = strdup(file);
+            }
+        }
+
         //piping
         else if (strcmp(token, "|") == 0) {
-            commands->pipe = 1;
-            token = strtok(NULL, "");
-            if (token) {
-                commands->next = command_parser(token);
+            if (commands->pipe) {
+                fprintf(stderr, "Error: only one pipe allowed\n");
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
             }
+
+            if (commands->argc == 0) {
+                fprintf(stderr, "Error: missing command before pipe\n");
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
+            }
+
+            commands->pipe = 1;
+
+            token = strtok(NULL, "");
+            if (!token || strlen(token) == 0) {
+                fprintf(stderr, "Error: missing command after pipe\n");
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
+            }
+
+            if (strchr(token, '|')) {
+                fprintf(stderr, "Error: only one pipe allowed\n");
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
+            }
+
+            commands->next = command_parser(token, NULL);
+            if (!commands->next) {
+                fprintf(stderr, "Error: invalid pipeline target\n");
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
+            }
+
+            if (commands->next->input || commands->next->output) {
+                fprintf(stderr, "Error: redirection not allowed in pipeline\n");
+                if (input != NULL) { flush(input); }
+                free_commands(commands);
+                return NULL;
+            }
+
             break;
-        } 
+        }
         //other args that are valid
         else {
-            commands->args[commands->argc++] = strdup(token);
+            if ((token[0] == '"' && token[strlen(token) - 1] == '"') ||
+                (token[0] == '\'' && token[strlen(token) - 1] == '\'')) {
+                    char *clean = strndup(token + 1, strlen(token) - 2);
+                    commands->args[commands->argc++] = clean;
+            } else {
+                commands->args[commands->argc++] = strdup(token);
+            }
         }
 
 
@@ -236,17 +321,26 @@ static void interactive_mode() {
     printf("Welcome to my shell!\n");
 
     while (1) {
+        char *line = NULL;
         printf("mysh> ");
         fflush(stdout);
-        char *line = line_reader(&input);
-
+        line = line_reader(&input);
+        
         if (!line) {
-            break;
+            printf("Exiting, Goodbye\n");
+            return;
         }
 
-        Commands *commands = command_parser(line);
+        if (line[0] == '\0') {
+            free(line);
+            continue; 
+        }
+
+        Commands *commands = command_parser(line, &input);
+        free(line);  
+
         if (!commands) {
-            continue;
+            continue;  
         }
 
         //print_debug(commands);
@@ -283,7 +377,8 @@ static void batch_mode(int fd) {
             break;
         }
 
-        Commands *commands = command_parser(line);
+        Commands *commands = command_parser(line, &input);
+        free(line);
         if (!commands) {
             continue;
         }
@@ -313,8 +408,10 @@ int main(int argc, char *argv[]) {
 
     if (argc == 1) {
         if (isatty(STDIN_FILENO)) {
+            batch_mode_flag = 0;
             interactive_mode();
         } else {
+            batch_mode_flag = 1;
             batch_mode(STDIN_FILENO);
         }
     } else if (argc == 2) {
@@ -323,6 +420,7 @@ int main(int argc, char *argv[]) {
             perror("Error: can't open file");
             exit(EXIT_FAILURE);
         }
+        batch_mode_flag = 1;
         batch_mode(fileno(file));
         fclose(file);
     } else {
