@@ -29,7 +29,15 @@ char *builtin_str[] = {
 
 //Checks if its a built in command (cd, pwd, which, die, exit) returns 1 if it is and 0 otherwise
 int is_a_builtin(Commands *commands) {
-    
+    int builtin=0;
+
+    for(int i = 0; i < num_builtins();i++){
+        if(strcmp(commands->args[0],builtin_str[i])==0){
+            builtin=1;
+        }
+    }
+
+    return builtin;
 }
 
 int num_builtins(){
@@ -63,20 +71,35 @@ int cd(char *path){
     return 0;
 }
 int pwd(){
-
+    char *cwd;
+    size_t dirsize=pathconf(".", _PC_PATH_MAX);
+    getcwd(cwd,dirsize);
+    if(cwd==NULL){
+        printf("pwd failed");
+        return 1;
+    }
+    printf("current working directory: %s",cwd);
+    return 0;
 }
 
 int which(){
+    char *path_env = getenv("PATH");
 
+    if (path_env == NULL) {
+        return 1;
+    }
+    
+}
+
+int exit(){
+    return 0;
 }
 
 int die(){
 
+    return 1;
 }
 
-int chdir(const char *path){
-
-}
 
 
 //for wildcard *
