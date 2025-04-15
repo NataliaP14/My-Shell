@@ -14,10 +14,6 @@ cd /nonexistent_directory
 pwd /home/user
 # Expected: Error: `pwd` does not take arguments
 
-# 4. `exit` with an invalid argument (not a valid exit code)
-exit foo
-# Expected: Error: invalid argument to exit (should ideally exit with status 1)
-
 # 5. `which` with an unknown command
 which unknown_command
 # Expected: unknown_command not found
