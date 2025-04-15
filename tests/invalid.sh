@@ -56,8 +56,8 @@ echo " "
 
 # ------------------------ Invalid Wildcard Tests -----------------------------
 
-echo Test 13: Wildcard not matching any files
-echo *.nonexistent
+echo Test 13: Wildcard not matching any files, which just prints the echo statement
+echo *.nothing
 echo " "
 
 
