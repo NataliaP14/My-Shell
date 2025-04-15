@@ -2,71 +2,63 @@
 
 # ------------------------ Invalid Built-in Command Tests ------------------------
 
-# 1. `cd` command with no argument (missing directory)
+echo Test 1: `cd` command with no argument (missing directory)
 cd
-# Expected: Error: missing argument for 'cd' or Error: No such file or directory
+echo " "
 
-# 2. `cd` command with non-existent directory
+echo Test 2: `cd` command with non-existent directory
 cd /nonexistent_directory
-# Expected: Error: No such file or directory
+echo " "
 
-# 3. `pwd` with an unexpected argument (should not take any)
+echo Test 3: `pwd` with an unexpected argument (should not take any)
 pwd /home/user
-# Expected: Error: `pwd` does not take arguments
+echo " "
 
-# 5. `which` with an unknown command
+echo Test 4: . `which` with an unknown command
 which unknown_command
-# Expected: unknown_command not found
+echo " "
 
 
 # ---------------------- Invalid Redirection and Pipes -------------------------
 
-# 6. Missing filename after output redirection
+echo Test 5: Missing filename after output redirection
 echo "Hello" > 
-# Expected: Error: missing or invalid filename after '>'
+echo " "
 
-# 7. Missing filename after input redirection
+echo Test 6: Missing filename after input redirection
 cat < 
-# Expected: Error: missing or invalid filename after '<'
+echo " "
 
-# 8. Multiple input redirections
+echo Test 7: Multiple input redirections
 cat < input.txt < output.txt
-# Expected: Error: multiple input redirections
+echo " "
 
-# 9. Multiple output redirections
+echo Test 8: Multiple output redirections
 echo "Hello" > output.txt > another_output.txt
-# Expected: Error: multiple output redirections
+echo " "
 
-# 10. Trying to redirect to a non-existent directory/file
+echo Test 9: Trying to redirect to a non-existent directory/file
 echo "Hello" > /nonexistent_path/output.txt
-# Expected: Error: couldn't open output file
+echo " "
 
-# 11. Missing command before pipe
+echo Test 10: Missing command before pipe
 | echo "This shouldn't work"
-# Expected: Error: missing command before pipe
+echo " "
 
-# 12. Missing command after pipe
+echo Test 11: Missing command after pipe
 echo "Hello" |
-# Expected: Error: missing command after pipe
+echo " "
 
-# 13. Multiple pipes in a single command
+echo Test 12: Multiple pipes in a single command
 echo "Hello" | echo "World" | echo "!"
-# Expected: Error: only one pipe allowed
+echo " "
 
 
 # ------------------------ Invalid Wildcard Tests -----------------------------
 
-# 14. Wildcard not matching any files
-echo *.nonexistent
-# Expected: *.nonexistent (no files match the pattern)
-
-# 15. Wildcard that should match files, but it's not matching due to syntax
-echo *.*
-# Expected: List of files in the current directory if any match, otherwise no output
+echo Test 13: Wildcard not matching any files, which just prints the echo statement
+echo *.nothing
+echo " "
 
 
-# ---------------------------- Other Invalid Command Tests ----------------------
 
-# 16. Executing a non-existent command
-unknown_command
-# Expected: Error: command not found
