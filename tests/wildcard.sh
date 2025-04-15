@@ -2,7 +2,7 @@ echo *.c
 
 echo "test1" > tests/textfiles/test1.txt
 echo "test2" > tests/textfiles/test2.txt
-cat tests/test*.txt
+cat tests/textfiles/test*.txt
 
 echo "hidden" > tests/.hidden.txt
 echo tests/*.sh

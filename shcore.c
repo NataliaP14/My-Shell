@@ -10,6 +10,14 @@
 #include <errno.h>
 #include <glob.h>
 
+int cd(Commands *commands);
+int pwd(Commands *commands);
+int which(Commands *commands);
+int exit_shell();
+int die();
+int num_builtins();
+
+
 char *builtin_str[] = {
     "cd",
     "pwd",
@@ -18,11 +26,11 @@ char *builtin_str[] = {
     "die"
   };
 
-  int (*builtin_func[]) (char **) = {
+  int (*builtin_func[]) (Commands *) = {
     &cd,
     &pwd,
     &which,
-    &exit,
+    &exit_shell,
     &die
   };
 
@@ -45,44 +53,55 @@ int num_builtins(){
 }
 
 //actual logic for the built in commands 
-int builtin_executor(Commands *command) {
-  if(command->args[0]==NULL){
+int builtin_executor(Commands *commands) {
+  if(commands->args[0]==NULL){
     printf("empty command");
     return 1;
   }
   for (int i = 0; i < num_builtins(); i++) {
-    if (strcmp(command->args[0], builtin_str[i]) == 0) {
-      return (*builtin_func[i])(command->args);
+    if (strcmp(commands->args[0], builtin_str[i]) == 0) {
+      return (*builtin_func[i])(commands);
     }
   }
+  return 1;
 }
 
-int cd(char *path){
-    if(path==NULL){
-        path==getenv("HOME");
-        if(path==NULL){
+int cd(Commands *commands){
+    char *path = commands->args[1];
+    if (commands->argc != 2) {
+           fprintf(stderr, "Cd: expected 1 argument\n");
+           return 1;
+       }
+    if (path==NULL) {
+        path=getenv("HOME");
+        if (path==NULL) {
             return 1;
         }
     }
-    if(chdir(path)!=0){
-        printf("chdir failed.");
+    if (chdir(path)!=0) {
+        perror("Error: cd failed");
         return 1;
     }
     return 0;
 }
-int pwd(){
-    char *cwd;
+int pwd(Commands *commands){
     size_t dirsize=pathconf(".", _PC_PATH_MAX);
-    getcwd(cwd,dirsize);
-    if(cwd==NULL){
+    char *cwd = malloc(dirsize);
+    if(getcwd(cwd,dirsize) == NULL){
         printf("pwd failed");
+        free(cwd);
         return 1;
     }
-    printf("current working directory: %s",cwd);
+    printf("%s\n",cwd);
+    free(cwd);
     return 0;
 }
 
 int which(Commands *commands){
+    if (commands->args[1] == NULL) {
+        printf("Error: missing command name\n");
+        return 1;
+    }
     const char *directories[] = {"/usr/local/bin", "/usr/bin", "/bin"}; 
 
     for (int i = 0; i < 3; i++) {
@@ -92,22 +111,23 @@ int which(Commands *commands){
         strcat(fullpath, commands->args[1]);
 
         if (access(fullpath, F_OK) == 0) {
-            printf("Path to executable: %s",fullpath);
+            printf("%s\n",fullpath);
             return 0;
+        }
     }
-}
-}
-
-int exit(){
-
-    return 0;
-}
-
-int die(){
     return 1;
 }
 
+int exit_shell(){
+    printf("Exiting, Goodbye\n");
+    exit(0);
+}
 
+int die(Commands *commands){
+    for (int i = 1; i < commands->argc; i++) fprintf(stderr, "%s ", commands->args[i]);
+        fprintf(stderr, "\n");
+        exit(1);
+}
 
 //for wildcard *
 void wildcard(Commands *commands, const char *token) {
@@ -171,7 +191,10 @@ static void redirection(Commands *commands) {
 //for the external commands (ls, echo, cat, etc )
 void external_commands(Commands *commands) {
     if (strchr(commands->args[0], '/')) {
-        execv(commands->args[0], commands->args);
+        if (execv(commands->args[0], commands->args) == -1) {
+            perror("Error executing command");
+            exit(EXIT_FAILURE);
+        }
     } else {
         const char *directories[] = {"/usr/local/bin", "/usr/bin", "/bin"}; 
 

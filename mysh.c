@@ -4,6 +4,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 #define BUFFER_SIZE 1024
 #define MAX_LINE 2048
@@ -325,11 +329,6 @@ static void interactive_mode() {
         printf("mysh> ");
         fflush(stdout);
         line = line_reader(&input);
-        
-        if (!line) {
-            printf("Exiting, Goodbye\n");
-            return;
-        }
 
         if (line[0] == '\0') {
             free(line);
@@ -403,29 +402,52 @@ static void batch_mode(int fd) {
     }
 }
 
+int is_executable(const char *file_path) {
+    struct stat st;
+    return (stat(file_path, &st) == 0 && (st.st_mode & S_IXUSR)); 
+}
+
 int main(int argc, char *argv[]) {
     FILE *file = NULL;
 
     if (argc == 1) {
-        if (isatty(STDIN_FILENO)) {
+        if (isatty(STDIN_FILENO)) {  
             batch_mode_flag = 0;
-            interactive_mode();
-        } else {
+            interactive_mode();  
+        } else {  
             batch_mode_flag = 1;
-            batch_mode(STDIN_FILENO);
+            batch_mode(STDIN_FILENO); 
         }
-    } else if (argc == 2) {
-        file = fopen(argv[1], "r");
-        if (!file) {
-            perror("Error: can't open file");
-            exit(EXIT_FAILURE);
+    }
+    else if (argc == 2) {
+        if (is_executable(argv[1])) {
+            pid_t pid = fork();
+            if (pid == 0) {
+                execv(argv[1], &argv[1]);  
+                perror("execv failed");
+                exit(EXIT_FAILURE);  
+            } else if (pid > 0) {
+                int status;
+                waitpid(pid, &status, 0);
+                return WEXITSTATUS(status);  
+            } else {
+                perror("fork failed");
+                return EXIT_FAILURE;
+            }
+        } else {
+            
+            file = fopen(argv[1], "r");
+            if (!file) {
+                perror("Error: can't open file");
+                exit(EXIT_FAILURE);
+            }
+            batch_mode_flag = 1;
+            batch_mode(fileno(file));  
+            fclose(file);
         }
-        batch_mode_flag = 1;
-        batch_mode(fileno(file));
-        fclose(file);
     } else {
         exit(EXIT_FAILURE);
     }
-    
+
     return EXIT_SUCCESS;
 }
