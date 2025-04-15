@@ -92,6 +92,8 @@ int which(Commands *commands){
         strcat(fullpath, commands->args[1]);
 
         if (access(fullpath, F_OK) == 0) {
+            printf("Path to executable: %s",fullpath);
+            return 0;
     }
 }
 }
@@ -101,7 +103,6 @@ int exit(){
 }
 
 int die(){
-
     return 1;
 }
 
