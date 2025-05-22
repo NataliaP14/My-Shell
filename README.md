@@ -8,6 +8,6 @@ This is a basic custom shell implementation in C that supports:
 - Pipes (`|`) – single pipe only  
 - Logical operators (`and`, `or`)  
 - Wildcard expansion (e.g., `*`)  
-- Built-in commands support (assumed implemented elsewhere)  
+- Built-in commands support 
 - Executable script launching  
 
